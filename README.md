@@ -14,6 +14,12 @@ TS-Haystack generates controlled question-answer pairs over long time series by 
 
 The benchmark enables systematic evaluation of time series language models' ability to find, reason about, and compare events across long-range contexts — analogous to "needle in a haystack" evaluations for text-based LLMs, but for continuous sensor data.
 
+### 🤗 Datasets download
+
+Direct dataset access is provided below:
+
+https://huggingface.co/datasets/nicozumarraga/capture24-ts-haystack-cot
+
 ## Quick Start
 
 ### Option A: Download Pre-Generated Dataset from HuggingFace
