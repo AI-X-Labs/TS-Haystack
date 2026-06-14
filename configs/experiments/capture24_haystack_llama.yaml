@@ -1,0 +1,100 @@
+# SPDX-FileCopyrightText: 2026 Anonymous Authors
+# SPDX-License-Identifier: CC-BY-NC-4.0
+#
+# Example experiment: TS-Haystack with LLaMA 3.2 1B backbone
+# Based on OpenTSLM train_capture24_haystack_cot.py defaults
+
+name: capture24_haystack_llama3_1b
+seed: 42
+
+# ------------------------------------------------------------------------------
+# Dataset Configuration
+# ------------------------------------------------------------------------------
+dataset:
+  name: capture24_haystack_cot
+  data_dir: data/capture24/ts_haystack/tasks
+  split: train
+  extra_kwargs:
+    tasks: all                     # All tasks (auto-discovered from filesystem)
+    context_lengths_seconds: [2.56, 10, 100, 900, 3600]
+
+# ------------------------------------------------------------------------------
+# Model Configuration (OpenTSLM-Flamingo)
+# ------------------------------------------------------------------------------
+model:
+  architecture: flamingo
+
+  encoder:
+    type: cnn_tokenizer
+    patch_size: 4
+    embed_dim: 128
+    # Formula: trained_patches = (max_context_seconds * sample_rate) // patch_size
+    trained_patches: 180000            # 7200s * 100Hz / 4
+    max_patches: 181000                # trained_patches + 1000 buffer
+
+  projector:
+    type: perceiver_resampler
+    num_latents: 64
+
+  extra_kwargs:
+    cross_attn_every_n_layers: 1
+    freeze_lm_embeddings: false    # LM embeddings are trainable
+
+# ------------------------------------------------------------------------------
+# Backbone Configuration
+# ------------------------------------------------------------------------------
+backbone:
+  name: llama
+  model_id: meta-llama/Llama-3.2-1B-Instruct
+  # Pretrained checkpoint (optional)
+  hf_checkpoint_repo: null         # e.g., "OpenTSLM/llama-3.2-1b-har-flamingo"
+  hf_checkpoint_file: model_checkpoint.pt
+
+# ------------------------------------------------------------------------------
+# Training Configuration
+# ------------------------------------------------------------------------------
+training:
+  backbone_training: freeze        # freeze | lora | full
+  batch_size: 2
+  num_epochs: 30
+
+  learning_rate:
+    default: 2.0e-4                # Single LR for all trainable params
+
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  warmup_ratio: 0.03               # 3% warmup
+
+  early_stopping:
+    enabled: true
+    patience: 5
+    metric: val_loss
+    mode: min
+
+  logging:
+    log_every_n_steps: 10
+    eval_every_n_steps: 100
+    wandb:
+      enabled: true
+      project: ts-haystack-tsalm
+      entity: null
+
+  checkpointing:
+    save_every_n_steps: 3000       # Intra-epoch checkpoints
+    save_best: true
+    metric: val_loss
+    mode: min
+
+  dataloader:
+    num_workers: 2
+    prefetch_factor: 2
+    pin_memory: true
+
+# ------------------------------------------------------------------------------
+# Runtime Configuration
+# ------------------------------------------------------------------------------
+runtime:
+  output_dir: results
+  run_name: test_run_wandb                   # Auto-generates run_YYYYMMDD_HHMMSS if null
+  resume_from: null                          # Path to checkpoint to resume from
+  max_samples: null                          # Limit samples per split (for quick testing)

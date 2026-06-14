@@ -1,36 +1,27 @@
-# Python
+# coding agent instructions
+CLAUDE.md
+
+# data
+/data/
+data.csv
+checkpoints/
+
+# training results and checkpoints
+results/
+configs/full_sweep/
+configs/paper/_runs/
+wandb/
+
+# TS-Haystack test plots output
+src/datasets/ts_haystack/test/plots/
+
+# others
 __pycache__/
-*.py[cod]
-*$py.class
-*.egg-info/
-*.egg
-dist/
-build/
-.eggs/
-
-# Virtual environments
-.venv/
-venv/
-env/
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Data (downloaded at runtime)
-data/*
-!data/.gitkeep
-
-# OS
+.env
 .DS_Store
-Thumbs.db
+.vscode/
+/core
+aws/
 
-# Test / coverage
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Misc
-*.log
+# paper LaTEX
+/paper/

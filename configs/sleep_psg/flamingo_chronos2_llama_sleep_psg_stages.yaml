@@ -1,0 +1,66 @@
+# Flamingo + Chronos-2 + Llama-3.2-1B on Sleep PSG (sleep stages)
+# All context lengths trained together (no curriculum)
+#
+# Usage: .venv/bin/python3 main.py --config configs/sleep_psg/flamingo_chronos2_llama_sleep_psg_stages.yaml
+
+name: flamingo_chronos2_llama_sleep_psg_stages
+seed: 42
+
+dataset:
+  name: sleep_psg_haystack
+  extra_kwargs:
+    label_class: sleep_stages
+    tasks: ["all"]
+    context_lengths_seconds: ["all"]
+
+model:
+  architecture: flamingo
+  encoder:
+    type: chronos2
+    model_id: amazon/chronos-2
+    freeze: true
+  projector:
+    type: perceiver_resampler
+    num_latents: 64
+  extra_kwargs:
+    cross_attn_every_n_layers: 1
+    freeze_lm_embeddings: false
+
+backbone:
+  name: llama
+  model_id: meta-llama/Llama-3.2-1B-Instruct
+
+training:
+  backbone_training: freeze
+  batch_size: 2
+  num_epochs: 5
+  learning_rate:
+    default: 5.0e-5
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  warmup_ratio: 0.03
+  optimizer:
+    type: adamw
+  early_stopping:
+    enabled: true
+    patience: 3
+    metric: val_loss
+    mode: min
+  logging:
+    log_every_n_steps: 10
+    wandb:
+      enabled: true
+      project: ts-haystack-sleep-psg
+  checkpointing:
+    save_every_n_steps: 10000
+    save_best: true
+    metric: val_loss
+    mode: min
+  dataloader:
+    num_workers: 4
+    prefetch_factor: 4
+    pin_memory: true
+
+runtime:
+  output_dir: results
+  run_name: flamingo_sleep_psg_stages

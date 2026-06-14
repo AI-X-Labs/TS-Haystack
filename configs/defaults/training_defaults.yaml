@@ -1,0 +1,66 @@
+# SPDX-FileCopyrightText: 2026 Anonymous Authors
+# SPDX-License-Identifier: CC-BY-NC-4.0
+#
+# Default training configuration for OpenTSLM-Flamingo
+# Values from train_ts_haystack_cot.py
+
+batch_size: 2                      # Default from training script
+num_epochs: 30                     # Default from training script
+warmup_ratio: 0.03                 # 3% warmup (warmup_fraction)
+weight_decay: 0.01
+max_grad_norm: 1.0
+
+# Backbone training mode: freeze | lora | full
+# - freeze: backbone LLM frozen, model components trained (default)
+# - lora:   LoRA adapters injected into backbone + model components trained
+# - full:   all parameters trainable
+backbone_training: freeze
+
+# LoRA configuration (only used when backbone_training: lora)
+lora:
+  r: 16
+  alpha: 32
+  dropout: 0.05
+  target_modules: null             # null = backbone-specific defaults (e.g. [q_proj, v_proj])
+
+# Learning rate (single LR for all trainable components)
+learning_rate:
+  default: 2.0e-4                  # learning_rate from training script
+
+# Early stopping
+early_stopping:
+  enabled: true
+  patience: 5                      # early_stop_patience
+  metric: val_loss
+  mode: min
+
+optimizer:
+  type: adamw
+  betas: [0.9, 0.999]
+  eps: 1.0e-8
+
+scheduler:
+  type: linear_with_warmup         # get_linear_schedule_with_warmup
+  num_warmup_steps: null           # Computed from warmup_ratio if null
+
+logging:
+  log_every_n_steps: 10
+  eval_every_n_steps: 100
+  log_outputs: true                # Log model outputs during validation
+  wandb:
+    enabled: true
+    project: ts-haystack
+    entity: null
+
+checkpointing:
+  save_every_n_steps: 3000         # checkpoint_interval (intra-epoch)
+  save_best: true
+  metric: val_loss
+  mode: min
+  max_checkpoints: 3
+
+dataloader:
+  num_workers: 8                   # From training script
+  pin_memory: true
+  prefetch_factor: 4               # From training script
+  persistent_workers: true         # Keep workers alive between epochs

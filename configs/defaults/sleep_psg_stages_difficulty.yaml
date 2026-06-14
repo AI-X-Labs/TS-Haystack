@@ -1,0 +1,39 @@
+# Sleep PSG TS-Haystack: Sleep Stages dataset difficulty defaults
+# Context lengths: 15min, 1h, 2h, 3h (at 200Hz)
+# Needle length: ratio-based (0.5%, 1%, 2%, 5%)
+
+context_lengths:
+  - 180000    # 15min
+  - 720000    # 1h
+  - 1440000   # 2h
+
+needle_ratios:
+  - 0.005     # 0.5%
+  - 0.01      # 1%
+  - 0.02      # 2%
+  - 0.05      # 5%
+
+# No stage restrictions — the generator naturally samples from whatever stages
+# are absent in each specific background window. At 2h, N3/REM are absent
+# 74-82% of the time; N1/N2/Wake are rarer targets but still possible.
+
+task_specific:
+  # Antecedent: tight adjacency
+  adjacency_gap_samples: 10
+  max_adjacency_gap_samples: 50
+
+  # Comparison: scale min_diff with needle length (15% relative difference)
+  # min_duration_diff = max(10000, needle_length_ms * 0.15)
+  min_duration_diff_max_ms: 10000
+
+  # Counting: cap total needle content at 20% of context
+  # max_bouts = min(configured_max, floor(0.20 / needle_ratio))
+  min_bouts: 2
+  max_bouts: 5
+
+  # Existence/Localization distractors
+  min_distractors: 1
+  max_distractors: 3
+
+  # Ordering question format
+  question_format: "boolean"

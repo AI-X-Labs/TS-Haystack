@@ -1,0 +1,160 @@
+# TS-Haystack Generation Config — Absolute Needle Length Ablation
+# =================================================================
+# Mirrors defaults.yaml but uses a single absolute ms needle range across
+# all tasks, instead of proportional ratios. Purpose: test whether the flat
+# performance-vs-context curve on Capture24 TS-Haystack is driven by needles
+# scaling with context. With an absolute 3-10s needle, a 7200s haystack
+# contains ~0.04-0.14% needle (vs ~5% under the ratio-based default).
+#
+# Context lengths aligned with LTAF / Sleep-PSG Haystack for direct
+# cross-dataset comparison. Short contexts (2.56s, 10s) are dropped because
+# a 3-10s needle would not fit.
+
+global:
+  seed: 42
+  n_jobs: 4
+  output_dir: data/capture24/ts_haystack/tasks_absolute_needle
+  overwrite: false
+  source_hz: 100
+
+context_lengths_seconds:
+  - 100
+  - 900
+  - 3600
+  - 7200
+
+samples:
+  train: 1000
+  val: 150
+  test: 150
+
+style_transfer:
+  transfer_mode: mean_only
+  blend_mode: cosine
+  blend_window_samples: 50
+
+# Single absolute needle length range used for every task. Drops into the
+# task config blocks below via YAML anchors.
+_needle: &needle_ms_range [3000, 10000]   # 3-10 seconds (absolute)
+
+tasks:
+
+  existence:
+    enabled: true
+    needle_position: random
+    needle_length_ms_range: *needle_ms_range
+    background_purity: any
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    min_distractors: 1
+    max_distractors: 3
+
+  localization:
+    enabled: true
+    needle_position: random
+    needle_length_ms_range: *needle_ms_range
+    background_purity: any
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    min_distractors: 1
+    max_distractors: 3
+
+  counting:
+    enabled: true
+    needle_position: random
+    needle_length_ms_range: *needle_ms_range
+    background_purity: any
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    min_bouts: 1
+    max_bouts: 5
+
+  ordering:
+    enabled: true
+    needle_position: random
+    needle_length_ms_range: *needle_ms_range
+    background_purity: any
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    question_format: category
+
+  state_query:
+    enabled: true
+    needle_position: random
+    needle_length_ms_range: *needle_ms_range
+    min_global_states: 2
+    max_global_states: 5
+    min_state_duration_ratio: 0.20
+    min_state_duration_max_samples: 500
+    position_mode: random
+    boundary_margin_frac: 0.1
+
+  antecedent:
+    enabled: true
+    needle_position: random
+    needle_length_ms_range: *needle_ms_range
+    background_purity: any
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    background_mode: low_activity
+    adjacency_gap_samples: 10
+    use_transition_probs: false
+
+  comparison:
+    enabled: true
+    needle_position: random
+    needle_length_ms_range: *needle_ms_range
+    background_purity: any
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    min_bouts: 2
+    max_bouts: 4
+    min_duration_diff_ratio: 0.02
+    min_duration_diff_max_ms: 2000
+
+  multi_hop:
+    enabled: true
+    needle_position: random
+    needle_length_ms_range: *needle_ms_range
+    background_purity: any
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    k_distribution: [0.4, 0.4, 0.2]
+    direction_mode: random
+    n_distractors_opposite: 0
+
+  anomaly_detection:
+    enabled: true
+    needle_position: random
+    needle_length_ms_range: *needle_ms_range
+    background_purity: pure
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    min_distractors: 1
+    max_distractors: 3
+
+  anomaly_localization:
+    enabled: true
+    needle_position: random
+    needle_length_ms_range: *needle_ms_range
+    background_purity: pure
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    min_distractors: 1
+    max_distractors: 3

@@ -1,0 +1,38 @@
+# Sleep PSG TS-Haystack: Arousals dataset difficulty defaults
+# Context lengths: 100s, 15min, 30min (at 200Hz)
+# Needle length: natural duration (10-45s, NOT ratio-based)
+
+context_lengths:
+  - 20000     # 100s
+  - 180000    # 15min
+  - 360000    # 30min
+
+# Arousals use natural bout duration — no ratio-based scaling.
+# The needle_length_ratio_range is set wide enough to accept any natural arousal.
+needle_length_ratio_range:
+  - 0.001     # effectively no lower bound
+  - 1.0       # effectively no upper bound
+
+task_specific:
+  # Antecedent: tight adjacency
+  adjacency_gap_samples: 10
+  max_adjacency_gap_samples: 50
+
+  # Comparison: natural arousal durations vary 10-45s, min_diff >= 5s
+  min_duration_diff_max_ms: 5000
+
+  # Counting: cap by context length
+  # 100s context: max 2 bouts, 15min: max 4, 30min: max 5
+  min_bouts: 2
+  max_bouts: 5
+
+  # Existence/Localization distractors
+  min_distractors: 1
+  max_distractors: 3
+
+  # Ordering question format
+  question_format: "boolean"
+
+# Background must be from arousal-free windows.
+# The background sampler rejects windows overlapping natural arousal events.
+# State Query (stage_context) requires mixed sleep background (>=2 stages).

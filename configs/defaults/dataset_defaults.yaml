@@ -1,0 +1,188 @@
+# SPDX-FileCopyrightText: 2026 Anonymous Authors
+# SPDX-License-Identifier: CC-BY-NC-4.0
+#
+# Default dataset configuration for TS-Haystack
+
+# ------------------------------------------------------------------------------
+# Global Settings
+# ------------------------------------------------------------------------------
+data_dir: data
+cache_dir: ${HOME}/.cache/ts_haystack
+output_dir: data/capture24/ts_haystack/tasks
+
+# Common settings
+sample_rate: 100                   # Capture24 sampling rate (Hz)
+num_channels: 3                    # x, y, z accelerometer
+
+# Generation settings
+seed: 42                           # Master seed for reproducibility
+n_jobs: 4                          # Parallel workers for generation
+overwrite: false                   # Overwrite existing files
+
+# ------------------------------------------------------------------------------
+# Context Lengths (in SECONDS)
+# Converted internally: seconds * sample_rate = samples
+# Example: 100s @ 100Hz = 10,000 samples
+# ------------------------------------------------------------------------------
+context_lengths_seconds:
+  - 2.56                           # ~256 samples (shortest, for quick tests)
+  - 10                             # 1,000 samples
+  - 100                            # 10,000 samples
+  - 900                            # 90,000 samples (15 min)
+  - 3600                           # 360,000 samples (1 hour)
+  - 7200                           # 720,000 samples (2 hours)
+
+# ------------------------------------------------------------------------------
+# Samples per Split
+# ------------------------------------------------------------------------------
+samples:
+  train: 1500
+  val: 150
+  test: 150
+
+# ------------------------------------------------------------------------------
+# Style Transfer Settings (applied during needle insertion)
+# ------------------------------------------------------------------------------
+style_transfer:
+  transfer_mode: mean_only         # "mean_only" (recommended) or "full"
+  blend_mode: cosine               # "cosine" or "linear"
+  blend_window_samples: 50         # Samples for boundary blending (~0.5s)
+
+# ------------------------------------------------------------------------------
+# Task Configurations
+# ------------------------------------------------------------------------------
+# Each task has its own difficulty settings.
+# Set enabled: false to skip a task.
+# needle_length_ratio_range: [min, max] as fraction of context (e.g., 0.02 = 2%)
+
+tasks:
+  # Task 1: Existence - "Is there {activity} in this recording?"
+  existence:
+    enabled: true
+    needle_position: random
+    needle_length_ratio_range: [0.02, 0.10]
+    background_purity: any
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    min_distractors: 1
+    max_distractors: 3
+
+  # Task 2: Localization - "When did the {activity} bout occur?"
+  localization:
+    enabled: true
+    needle_position: random
+    needle_length_ratio_range: [0.02, 0.10]
+    background_purity: any
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    min_distractors: 1
+    max_distractors: 3
+
+  # Task 3: Counting - "How many {activity} bouts occurred?"
+  counting:
+    enabled: true
+    needle_position: random
+    needle_length_ratio_range: [0.02, 0.08]
+    background_purity: any
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    min_bouts: 1
+    max_bouts: 5
+
+  # Task 4: Ordering - "Did {activity_a} occur before {activity_b}?"
+  ordering:
+    enabled: true
+    needle_position: random
+    needle_length_ratio_range: [0.02, 0.10]
+    background_purity: any
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    question_format: category
+
+  # Task 5: State Query - "What was the activity level when {event} occurred?"
+  state_query:
+    enabled: true
+    needle_position: random
+    needle_length_ratio_range: [0.01, 0.05]
+    # background_purity: mixed (HARDCODED)
+    min_global_states: 2
+    max_global_states: 5
+    min_state_duration_ratio: 0.20
+    min_state_duration_max_samples: 500
+    position_mode: random
+    boundary_margin_frac: 0.1
+
+  # Task 6: Antecedent - "What activity occurred before {target}?"
+  antecedent:
+    enabled: true
+    needle_position: random
+    needle_length_ratio_range: [0.02, 0.08]
+    background_purity: any
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    background_mode: low_activity
+    adjacency_gap_samples: 10
+    use_transition_probs: false
+
+  # Task 7: Comparison - "What was the longest/shortest period?"
+  comparison:
+    enabled: true
+    needle_position: random
+    needle_length_ratio_range: [0.02, 0.08]
+    background_purity: any
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    min_bouts: 2
+    max_bouts: 4
+    min_duration_diff_ratio: 0.02
+    min_duration_diff_max_ms: 2000
+
+  # Task 8: Multi-Hop - "When did the Kth {target} occur after {anchor}?"
+  multi_hop:
+    enabled: true
+    needle_position: random
+    needle_length_ratio_range: [0.02, 0.06]
+    background_purity: any
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    k_distribution: [0.4, 0.4, 0.2]
+    direction_mode: random
+    n_distractors_opposite: 0
+
+  # Task 9: Anomaly Detection - "Is there an anomaly in this recording?"
+  anomaly_detection:
+    enabled: true
+    needle_position: random
+    needle_length_ratio_range: [0.03, 0.15]
+    background_purity: pure
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    min_distractors: 1
+    max_distractors: 3
+
+  # Task 10: Anomaly Localization - "Is there an anomaly, and when?"
+  anomaly_localization:
+    enabled: true
+    needle_position: random
+    needle_length_ratio_range: [0.03, 0.15]
+    background_purity: pure
+    margin_ratio: 0.02
+    margin_max_samples: 100
+    min_gap_ratio: 0.02
+    min_gap_max_samples: 100
+    min_distractors: 1
+    max_distractors: 3

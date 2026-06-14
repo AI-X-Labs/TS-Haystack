@@ -1,0 +1,72 @@
+# Paper run -- ChatTS (original paper setup) + Llama-3.2-1B on UK-DALE-Haystack
+# Mirrors chatts_ltaf_haystack.yaml: MLP patch encoder + SP encoding,
+# hidden_size 2048 to match Llama-3.2-1B (no projector). UK-DALE is
+# single-channel mains, so num_features=1. At 86400s ctx we get
+# 14400/20 = 720 patches, within max_sequence_length=1024.
+
+name: chatts_llama_uk_dale_haystack
+seed: 42
+
+dataset:
+  name: uk_dale_haystack
+  data_dir: data
+  split: train
+  extra_kwargs:
+    tasks: ["all"]
+    context_lengths_seconds: ["all"]
+    base_dir: data/uk_dale/uk_dale_haystack/tasks
+
+model:
+  architecture: chatts
+  encoder:
+    type: mlp_encoder
+    patch_size: 20
+    num_layers: 3
+    hidden_size: 2048
+    num_features: 1
+    max_sequence_length: 1024
+  extra_kwargs:
+    encoding_method: sp
+    freeze_ts_encoder: false
+    freeze_lm_embeddings: false
+
+backbone:
+  name: llama
+  model_id: meta-llama/Llama-3.2-1B-Instruct
+
+training:
+  backbone_training: freeze
+  batch_size: 2
+  num_epochs: 5
+  learning_rate:
+    default: 2.0e-4
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  warmup_ratio: 0.03
+  optimizer:
+    type: adamw
+  early_stopping:
+    enabled: true
+    patience: 3
+    metric: val_loss
+    mode: min
+  logging:
+    log_every_n_steps: 10
+    wandb:
+      enabled: true
+      project: anon-tslm-paper
+  checkpointing:
+    save_every_n_steps: 0
+    save_best: true
+    metric: val_loss
+    mode: min
+  dataloader:
+    num_workers: 4
+    prefetch_factor: 4
+    pin_memory: true
+  eval_max_new_tokens: 500
+
+runtime:
+  output_dir: results
+  run_name: chatts_uk_dale_haystack
+  eval_samples_ratio: 0.1

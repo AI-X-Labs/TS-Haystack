@@ -1,295 +1,180 @@
 # TS-Haystack
 
-A semi-synthetic benchmark for testing retrieval and reasoning over long time series (1K-1M+ datapoints) using Capture-24 accelerometer data.
+### A Multi-Task Retrieval Benchmark for Long-Context Time-Series Reasoning
 
-> **Update [03/02/2026]:** 🇧🇷 TS-Haystack has been accepted into ICLR TSLAM 2026!
+> **Update [03/02/2026]:** 🇧🇷 The workshop version of TS-Haystack was accepted to **ICLR TSLAM 2026!** This `main` branch hosts the extended full-paper code; the original workshop version is archived on the [`iclr-workshop`](https://github.com/AI-X-Labs/TS-Haystack/tree/iclr-workshop) branch.
 
 <p align="center">
-  <img src="figures/TS_Haystack_figure.png" alt="TS-Haystack Overview" width="100%">
+  <img src="figures/ALL_TASKS.png" alt="TS-Haystack tasks overview" width="100%">
 </p>
 
-## Overview
+This repository contains the full **TS-Haystack** code: the benchmark-generation
+pipeline, the time-series language model (TSLM) training/evaluation framework,
+and **ARTS** — our agentic retrieval baseline.
 
-TS-Haystack generates controlled question-answer pairs over long time series by inserting carefully crafted "needle" activities into realistic backgrounds from the Capture-24 dataset. It covers 10 distinct tasks (existence detection, temporal localization, counting, ordering, state query, antecedent reasoning, comparison, multi-hop localization, anomaly detection, and anomaly localization) across context lengths from 2.56 seconds to 2 hours.
+**🤗 Datasets (Hugging Face):** https://huggingface.co/collections/nz00shuuuu/ts-haystack
 
-The benchmark enables systematic evaluation of time series language models' ability to find, reason about, and compare events across long-range contexts — analogous to "needle in a haystack" evaluations for text-based LLMs, but for continuous sensor data.
+---
 
-### 🤗 Datasets download
+## What is TS-Haystack?
 
-Direct dataset access is provided below:
+TS-Haystack extends the needle-in-a-haystack paradigm to time series. It turns
+long, expert-annotated recordings into **ten event-grounded question-answering
+tasks** at controlled context lengths from **100 s to 24 h**, across four
+domains:
 
-https://huggingface.co/datasets/nicozumarraga/capture24-ts-haystack-cot
+| Category | Tasks |
+|----------|-------|
+| **Direct Retrieval** | Existence, Localization, Counting |
+| **Temporal Reasoning** | Ordering, State Query, Antecedent |
+| **Multi-Step Reasoning** | Comparison, Multi-Hop |
+| **Anomaly Retrieval** | Anomaly Detection, Anomaly Localization |
 
-## Quick Start
+The benchmark is built from four openly available source datasets:
 
-### Option A: Download Pre-Generated Dataset from HuggingFace
+| Source dataset | Modality | Channels | Rate | HF benchmark repo |
+|----------------|----------|:--------:|------|-------------------|
+| **Capture24** | Wrist accelerometer | 3 | 100 Hz | [`nz00shuuuu/capture24-ts-haystack-cot`](https://huggingface.co/datasets/nz00shuuuu/capture24-ts-haystack-cot) |
+| **Sleep PSG** | Polysomnography | 13 | 100 Hz | [`nz00shuuuu/sleep_psg_ts_haystack`](https://huggingface.co/datasets/nz00shuuuu/sleep_psg_ts_haystack) |
+| **LTAF** | 2-lead ECG | 2 | 128 Hz | [`nz00shuuuu/ltaf-haystack-fixed`](https://huggingface.co/datasets/nz00shuuuu/ltaf-haystack-fixed) |
+| **UK-DALE** | Household mains power | 1 | ~0.17 Hz | [`nz00shuuuu/uk-dale-haystack`](https://huggingface.co/datasets/nz00shuuuu/uk-dale-haystack) |
 
-```bash
-pip install ts-haystack[download]
+Samples are generated with two protocols: *semi-synthetic needle insertion*
+(Capture24, UK-DALE) and *natural-segment sampling* (Sleep PSG, LTAF).
 
-# Download the CoT (chain-of-thought) dataset
-python scripts/download_from_hf.py --dataset ts-haystack-cot
+## Methods evaluated
 
-# Or download only core artifacts for local generation
-python scripts/download_from_hf.py --dataset ts-haystack-core
+- **TSLMs** — ChatTS, ChatTime, OpenTSLM-Flamingo, and ITFormer, all on a
+  Llama-3.2-1B backbone (Flamingo and ITFormer use a frozen Chronos-2 encoder).
+- **ARTS (Agentic Retrieval for Time-Series)** — a GPT-5.4 orchestrator that
+  reasons over a symbolic timeline produced by sweeping per-domain classifier
+  tools over the recording, issuing `<bout>` tool calls to re-classify segments
+  at full resolution. See [`src/models/ts_llm/arts/`](src/models/ts_llm/arts).
+- **Reference baselines** — an *Oracle* (GPT-5.4 over the ground-truth
+  annotation timeline) and a closed-form *Random* baseline.
 
-# Dry run to see what would be downloaded
-python scripts/download_from_hf.py --dry-run
-```
+---
 
-### Option B: Generate From Scratch
-
-Requires raw Capture-24 data.
-
-```bash
-pip install ts-haystack
-
-# 1. Download raw Capture-24 sensor data
-python scripts/download_from_hf.py --dataset capture24-raw
-
-# 2. Build Phase 1 artifacts (timelines, bout index, transition matrix)
-python scripts/build_core_artifacts.py --n-jobs 8
-
-# 3. Generate task datasets
-python scripts/generate_dataset.py --config configs/default_generation_config.yaml
-
-# 4. (Optional) Generate CoT rationales
-pip install ts-haystack[cot]
-python scripts/generate_cot.py --context-lengths 100 --tasks all
-```
-
-## Loading the Dataset
-
-```python
-import polars as pl
-
-# Load a specific task/context-length/split
-df = pl.read_parquet("data/capture24/ts_haystack/tasks/100s/existence/train/data.parquet")
-
-print(f"Samples: {len(df)}")
-print(f"Columns: {df.columns}")
-
-# Access a sample
-sample = df.row(0, named=True)
-print(f"Task: {sample['task_type']}")
-print(f"Question: {sample['question']}")
-print(f"Answer: {sample['answer']}")
-print(f"Time series length: {len(sample['x_axis'])} samples")
-```
-
-### Parquet Schema
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `x_axis`, `y_axis`, `z_axis` | List[float] | 3-axis accelerometer data |
-| `task_type` | str | Task name (e.g., "existence") |
-| `context_length_samples` | int | Window size in samples |
-| `recording_time_start` | str | Human-readable start time |
-| `recording_time_end` | str | Human-readable end time |
-| `question` | str | Generated question |
-| `answer` | str | Ground truth answer |
-| `answer_type` | str | boolean, integer, category, time_range, or timestamp |
-| `needles` | str (JSON) | Inserted needle metadata |
-| `difficulty_config` | str (JSON) | Generation parameters |
-| `is_valid` | bool | Validation status |
-
-## Task Overview
-
-| # | Task | Question Example | Answer Type |
-|---|------|-----------------|-------------|
-| 1 | Existence | "Is there walking in this recording?" | boolean |
-| 2 | Localization | "When did the walking bout occur?" | time_range |
-| 3 | Counting | "How many walking bouts occurred?" | integer |
-| 4 | Ordering | "Did walking occur before sitting?" | boolean/category |
-| 5 | State Query | "What was the activity level at 7:15 AM?" | category |
-| 6 | Antecedent | "What activity occurred before walking?" | category |
-| 7 | Comparison | "What was the longest period of walking?" | time_range |
-| 8 | Multi-Hop | "When did the 2nd walking bout occur after sitting?" | time_range |
-| 9 | Anomaly Detection | "Is there an anomaly in this recording?" | boolean |
-| 10 | Anomaly Localization | "Is there an anomaly, and if so, when?" | time_range |
-
-## Architecture
-
-The generation pipeline has four phases:
-
-**Phase 1 — Core Artifacts** (one-time):
-- `TimelineBuilder`: Extracts activity bouts from Capture-24 accelerometer data
-- `BoutIndexer`: Creates cross-participant index for fast sampling
-- `TransitionMatrix`: Learns activity transition probabilities
-
-**Phase 2 — Sampling & Style Transfer** (per sample):
-- `BackgroundSampler`: Samples pure or mixed background windows
-- `NeedleSampler`: Samples activity needles from the bout index
-- `StyleTransfer`: Adapts needle statistics to match background via covariance projection and boundary blending
-
-**Phase 3 — Task Generation** (per sample):
-- 10 task generators create diverse Q/A pairs with inserted needles
-- Each uses dependency-injected Phase 2 components
-- `PromptTemplateBank` provides natural language diversity
-
-**Phase 4 — CoT Generation** (optional):
-- LLM-based chain-of-thought rationale generation
-- Adds a `rationale` column to parquet files
-
-```
-Capture-24 data ──► TimelineBuilder ──► BoutIndexer ──► TransitionMatrix
-                                              │                  │
-                                              ▼                  ▼
-                                    BackgroundSampler    NeedleSampler
-                                              │                  │
-                                              └───────┬──────────┘
-                                                      ▼
-                                    StyleTransfer + PromptTemplateBank
-                                                      │
-                                                      ▼
-                                            TaskGenerator (x10)
-                                                      │
-                                                      ▼
-                                             data.parquet files
-```
-
-## Creating Your Own Samples
-
-The pipeline is not limited to Capture-24 — you can use any time series source by implementing custom `BackgroundSampler` and `NeedleSampler` instances:
-
-```python
-from ts_haystack.core import (
-    BackgroundSampler, NeedleSampler, StyleTransfer,
-    PromptTemplateBank, SeedManager, BoutIndexer,
-    TimelineBuilder, TransitionMatrix,
-)
-from ts_haystack.tasks import get_task_generator
-from ts_haystack.core.data_structures import DifficultyConfig
-
-# Load Phase 1 artifacts
-timelines = TimelineBuilder.load_all_timelines()
-bout_index = BoutIndexer.load_index()
-transition_matrix = TransitionMatrix.load()
-
-# Initialize Phase 2 components
-seed_manager = SeedManager(master_seed=42)
-bg_sampler = BackgroundSampler(timelines, bout_index, source_hz=100)
-needle_sampler = NeedleSampler(bout_index, transition_matrix, source_hz=100)
-style_transfer = StyleTransfer(transfer_mode="mean_only", blend_mode="cosine")
-template_bank = PromptTemplateBank()
-
-# Create a task generator
-TaskClass = get_task_generator("existence")
-generator = TaskClass(
-    background_sampler=bg_sampler,
-    needle_sampler=needle_sampler,
-    style_transfer=style_transfer,
-    template_bank=template_bank,
-    seed_manager=seed_manager,
-    source_hz=100,
-)
-
-# Generate samples
-difficulty = DifficultyConfig(
-    context_length_samples=10000,
-    needle_position="random",
-    needle_length_ratio_range=(0.02, 0.10),
-    background_purity="pure",
-)
-
-samples = generator.generate_dataset(
-    n_samples=100,
-    difficulty=difficulty,
-    split="train",
-    n_jobs=4,
-)
-```
-
-## Configuration
-
-Dataset generation is controlled via YAML configuration. See `configs/default_generation_config.yaml` for all parameters.
-
-Key options:
-
-| Parameter | Description |
-|-----------|-------------|
-| `context_lengths_seconds` | Window sizes in seconds (e.g., 2.56, 10, 100, 900, 3600, 7200) |
-| `needle_length_ratio_range` | Needle duration as fraction of context (e.g., [0.02, 0.10]) |
-| `background_purity` | "pure" (single activity), "mixed" (multiple activities), or "any" |
-| `needle_position` | "random", "beginning", "middle", or "end" |
-| `style_transfer.transfer_mode` | "mean_only" (recommended) or "full" (covariance projection) |
-| `style_transfer.blend_mode` | "cosine" or "linear" boundary blending |
+## Installation
 
 ```bash
-# Print default config to customize
-python scripts/generate_dataset.py --print-default-config > my_config.yaml
-
-# Validate config without generating
-python scripts/generate_dataset.py --config my_config.yaml --dry-run
+uv sync                      # or: pip install -e .
+uv sync --group llm          # OpenAI orchestrator (ARTS / Oracle)
+uv sync --group anthropic    # optional: Anthropic / Bedrock orchestrator
 ```
 
-## Output Directory Structure
+## Quick start
 
-```
-data/capture24/ts_haystack/
-├── timelines/P*.parquet          # Per-participant activity timelines
-├── bout_index.parquet            # Cross-participant bout index
-├── transition_matrix.json        # Activity transition probabilities
-└── tasks/
-    ├── 2_56s/                    # 256 samples at 100Hz
-    ├── 10s/                      # 1,000 samples
-    ├── 100s/                     # 10,000 samples
-    │   ├── existence/
-    │   │   ├── train/data.parquet
-    │   │   ├── val/data.parquet
-    │   │   ├── test/data.parquet
-    │   │   └── metadata.json
-    │   ├── localization/
-    │   └── ...
-    ├── 900s/                     # 90,000 samples (~15 min)
-    ├── 3600s/                    # 360,000 samples (1 hour)
-    └── 7200s/                    # 720,000 samples (2 hours)
-```
-
-## Scripts
-
-| Script | Description |
-|--------|-------------|
-| `scripts/download_from_hf.py` | Download datasets from HuggingFace Hub |
-| `scripts/build_core_artifacts.py` | Build Phase 1 artifacts from raw Capture-24 data |
-| `scripts/generate_dataset.py` | Generate task datasets using YAML configuration |
-| `scripts/generate_cot.py` | Generate LLM-based chain-of-thought rationales |
-| `scripts/inspect_dataset.py` | Inspect generated parquet files in readable JSON |
-| `scripts/aggregate_eval_results.py` | Aggregate model evaluation metrics |
-
-## Development
+### 1. Download the benchmark
 
 ```bash
-# Install with dev dependencies
-pip install -e ".[all]"
+# Everything in the collection
+python scripts/data/download_from_hf.py
 
-# Run tests
-pytest tests/ -v
+# Or a single dataset
+python scripts/data/download_from_hf.py --dataset ts-haystack-cot          # Capture24
+python scripts/data/download_from_hf.py --dataset sleep-psg-ts-haystack     # Sleep PSG
+python scripts/data/download_from_hf.py --dataset ltaf-haystack-fixed        # LTAF (ECG)
+python scripts/data/download_from_hf.py --dataset uk-dale-haystack           # UK-DALE
 
-# Run specific task tests
-pytest tests/tasks/ -v
-
-# Lint
-ruff check src/
-ruff format src/
+python scripts/data/download_from_hf.py --list-subsets   # inspect available subsets
+python scripts/data/download_from_hf.py --dry-run        # preview
 ```
 
-## Citation
+### 2. Train a TSLM
 
-If you use TS-Haystack in your research, please cite:
+Paper runs are configured under [`configs/paper/`](configs/paper):
 
-```bibtex
-@misc{Zumarraga2026TSHaystack,
-  title        = {TS-Haystack: A Multi-Scale Retrieval Benchmark for Time Series Language Models},
-  author       = {Zumarraga, Nicolas and Kaar, Thomas and Wang, Ning and Xu, Maxwell A. and Rosenblatt, Mark and Kreft, Markus and O'Sullivan, Kevin and Schmiedmayer, Paul and Langer, Patrick and Jakob, Robert},
-  year         = {2026},
-  eprint       = {2602.14200},
-  archivePrefix= {arXiv},
-  primaryClass = {cs.LG},
-  url          = {https://arxiv.org/abs/2602.14200},
-}
+```bash
+python main.py --config configs/paper/flamingo_capture24_haystack_cot.yaml
+python main.py --config configs/paper/itformer_sleep_psg_stages.yaml --no-wandb
 ```
+
+### 3. Evaluate
+
+```bash
+# Run the latest checkpoint on the test split (dataset/model read from the config)
+python scripts/evaluate.py --config configs/paper/flamingo_capture24_haystack_cot.yaml
+
+# Aggregate a run's prediction logs into per-task / per-context metrics
+python scripts/eval/eval_haystack_log.py results/<run_name>/output_logs/test_epoch_<N>.json
+```
+
+### 4. Run ARTS (agentic retrieval)
+
+ARTS uses per-domain classifier tools. Download the pre-trained checkpoints
+(bundled in `nz00shuuuu/arts-rlm-classifiers`) into the paths the scripts expect:
+
+```bash
+python scripts/download_classifiers.py              # all domains
+python scripts/download_classifiers.py --domain ecg # or a single domain
+```
+
+Each ARTS domain in `src/models/ts_llm/arts/` is then a runnable module:
+
+```bash
+python -m src.models.ts_llm.arts.capture24  --tasks existence --context-lengths 100   # Capture24
+python -m src.models.ts_llm.arts.sleep      ...                                        # Sleep PSG
+python -m src.models.ts_llm.arts.ltaf       ...                                        # LTAF (ECG)
+python -m src.models.ts_llm.arts.uk_dale_prepass ...                                   # UK-DALE
+# Oracle pre-pass variants: arts.capture24_prepass, arts.sleep_prepass
+```
+
+### 5. (Optional) Train the ARTS classifier tools from scratch
+
+Instead of downloading them, the per-domain classifier tools can be trained
+under [`src/models/classifiers/`](src/models/classifiers):
+
+```bash
+python -m src.models.classifiers.capture24.train --epochs 50
+python -m src.models.classifiers.sleep.train     --label-class sleep_stages
+python -m src.models.classifiers.ecg.train_beat_htf ...
+python -m src.models.classifiers.uk_dale.train   ...
+```
+
+---
+
+## Repository structure
+
+```
+ts-haystack/
+├── src/
+│   ├── datasets/                # Benchmark generation + loaders (DATASET_REGISTRY)
+│   │   ├── capture24/           #   Capture24 source + activity classification
+│   │   ├── capture24_haystack/  #   Capture24 needle-insertion benchmark
+│   │   ├── sleep_psg_haystack/  #   Sleep PSG natural-segment benchmark
+│   │   ├── ltaf_haystack/       #   LTAF (ECG) natural-segment benchmark
+│   │   └── uk_dale_haystack/    #   UK-DALE needle-insertion benchmark
+│   ├── models/
+│   │   ├── ts_llm/            # TSLM architectures (MODEL_REGISTRY)
+│   │   │   ├── opentslm_flamingo/  chatTS/  chattime/  itformer/
+│   │   │   └── arts/          #   ARTS: providers, query budget, bout_utils,
+│   │   │                      #   + per-domain orchestrators (capture24, sleep, ltaf, …)
+│   │   ├── classifiers/       # ARTS per-domain classifier tools — train here
+│   │   │   ├── encoders.py    #   shared frozen encoders (Chronos-2, OxWearables)
+│   │   │   └── capture24/ sleep/ ecg/ uk_dale/   (each: model + train.py)
+│   │   ├── ts_encoder/        # Time-series encoders (ENCODER_REGISTRY)
+│   │   └── projector/         # Encoder→LLM projectors
+│   ├── backbones/             # LLM backbone (llama)
+│   ├── training/  evaluation/  prompt/
+├── scripts/
+│   ├── data/                  # Download + benchmark generation
+│   ├── eval/                  # ARTS metric aggregation + plots
+│   ├── train.py  evaluate.py  run_paper_runs.py
+├── configs/                   # YAML configs (paper/ holds the paper runs)
+├── docs/                      # adding-datasets, adding-models, architecture
+└── tests/
+```
+
+The pipeline reads as three stages: **`datasets/`** (build the benchmark) →
+**`classifiers/`** (train the ARTS tools) → **`ts_llm/arts/`** (load the tools
+and run the agentic orchestrator), alongside the four TSLMs.
+
+## Extending the framework
+
+- Add a dataset: [`docs/adding-datasets.md`](docs/adding-datasets.md)
+- Add a model or backbone: [`docs/adding-models.md`](docs/adding-models.md)
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+Code is released under the MIT License (see [`LICENSE`](LICENSE)).

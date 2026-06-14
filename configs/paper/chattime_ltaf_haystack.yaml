@@ -1,0 +1,75 @@
+# Paper run — ChatTime + Llama-3.2-1B on LTAF-Haystack
+# Pure-LLM TSLM: discretize TS values into bin tokens, serialize as text.
+# Structural deviation from the Flamingo baseline (unavoidable):
+#   - LoRA + trainable embeddings required so the extended bin vocab can be learned.
+#   - batch_size=1 because serialized TS is long.
+
+name: chattime_llama_ltaf_haystack
+seed: 42
+
+dataset:
+  name: ltaf_haystack
+  data_dir: data
+  split: train
+  extra_kwargs:
+    tasks: ["all"]
+    # ChatTime-specific cap: 7200s LTAF serializes to ~460K tokens
+    # (observed), which exceeds Llama-3.2's 128K position limit even
+    # after truncation. 900s -> ~58K tokens fits.
+    context_lengths_seconds: [100, 900]
+    base_dir: data/ltafdb/ltaf_haystack/rhythms/tasks
+
+model:
+  architecture: chattime
+  extra_kwargs:
+    n_tokens: 10002
+    precision: 4
+    train_embeddings: true
+    max_seq_length: 131072
+
+backbone:
+  name: llama
+  model_id: meta-llama/Llama-3.2-1B-Instruct
+
+training:
+  backbone_training: lora
+  batch_size: 1
+  num_epochs: 5
+  learning_rate:
+    default: 2.0e-4
+    embeddings: 2.0e-4
+  lora:
+    r: 16
+    alpha: 16
+    dropout: 0.0
+    target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  warmup_ratio: 0.05
+  optimizer:
+    type: adamw
+  early_stopping:
+    enabled: true
+    patience: 3
+    metric: val_loss
+    mode: min
+  logging:
+    log_every_n_steps: 10
+    wandb:
+      enabled: true
+      project: anon-tslm-paper
+  checkpointing:
+    save_every_n_steps: 0
+    save_best: true
+    metric: val_loss
+    mode: min
+  dataloader:
+    num_workers: 2
+    prefetch_factor: 2
+    pin_memory: true
+  eval_max_new_tokens: 500
+
+runtime:
+  output_dir: results
+  run_name: chattime_ltaf_haystack
+  eval_samples_ratio: 0.1

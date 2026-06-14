@@ -1,0 +1,32 @@
+# SPDX-FileCopyrightText: 2026 Anonymous Authors
+# SPDX-License-Identifier: CC-BY-NC-4.0
+#
+# Default model configuration for OpenTSLM-Flamingo
+
+architecture: flamingo
+
+# Time series encoder (CNNTokenizer from OpenTSLM)
+encoder:
+  type: cnn_tokenizer
+  patch_size: 4                    # Samples per patch (PATCH_SIZE from model_config.py)
+  embed_dim: 128                   # Embedding dimension (ENCODER_OUTPUT_DIM)
+  transformer_input_dim: 128       # Same as embed_dim for CNNTokenizer
+  dropout: 0.0
+  num_channels: 3                  # x, y, z accelerometer (aggregated to 1D magnitude)
+  # Positional embedding sizes - COMPUTED DYNAMICALLY based on max context length:
+  # trained_patches = (max_context_seconds * sample_rate) // patch_size
+  # max_patches = trained_patches + 1000 (buffer for slightly longer sequences)
+  # Example: 7200s @ 100Hz / 4 = 180,000 trained_patches, 181,000 max_patches
+
+# Projector (maps encoder output to LLM input)
+# Available types: perceiver_resampler, linear, mlp
+projector:
+  type: perceiver_resampler
+  num_latents: 64                  # Number of learned latent tokens (M)
+  # vis_dim is automatically set to encoder.embed_dim
+  # hidden_dim is automatically set from LLM backbone
+
+# Architecture-specific settings (forwarded to model's from_config)
+extra_kwargs:
+  cross_attn_every_n_layers: 1     # Insert cross-attention every N layers
+  freeze_lm_embeddings: false      # Whether to freeze LM input embeddings

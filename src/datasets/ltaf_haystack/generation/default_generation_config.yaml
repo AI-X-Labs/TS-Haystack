@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: CC-BY-NC-4.0
+# Default config for the LTAF-Haystack natural-only pipeline.
+#
+# Every sample is an unmodified slice of a real LTAF recording. Per-task
+# context-length gating lives in each task class's supports_context_length.
+
+global:
+  seed: 42
+  source_hz: 128
+  n_jobs: 1
+  label_class: rhythms
+  output_dir: data/ltafdb/ltaf_haystack/rhythms/tasks
+
+context_lengths_seconds: [100, 900, 3600, 7200]
+
+samples:
+  train: 1000
+  validation: 150
+  test: 150
+
+tasks:
+  existence:           {enabled: true}
+  localization:        {enabled: true}
+  counting:            {enabled: true}
+  ordering:            {enabled: true}
+  state_query:         {enabled: true}
+  antecedent:          {enabled: true}
+  comparison:          {enabled: true}
+  multi_hop:           {enabled: true}
+  anomaly_detection:   {enabled: true}
+  anomaly_localization: {enabled: true}

@@ -1,0 +1,71 @@
+# Paper run — ITFormer + Chronos-2 + Llama-3.2-1B on TS-Haystack (Capture24)
+# with ABSOLUTE needle length (3-10s, context-length independent).
+# No CoT rationale: uses direct answers. Mirrors itformer_capture24_haystack_cot.yaml
+# but switches dataset to capture24_haystack_classification (non-CoT) and points at
+# the regenerated tasks_absolute_needle/ parquet tree.
+
+name: itformer_chronos2_llama_capture24_haystack_absolute_needle
+seed: 42
+
+dataset:
+  name: capture24_haystack_classification
+  extra_kwargs:
+    tasks: ["all"]
+    context_lengths_seconds: ["all"]
+    data_dir: data/capture24/ts_haystack/tasks_absolute_needle
+
+model:
+  architecture: itformer
+  encoder:
+    type: chronos2
+    model_id: amazon/chronos-2
+    freeze: true
+    multi_variable: true
+  extra_kwargs:
+    it_d_model: 2048
+    it_n_heads: 16
+    it_layers: 2
+    it_dropout: 0.1
+    prefix_num: 25
+    freeze_ts_encoder: true
+
+backbone:
+  name: llama
+  model_id: meta-llama/Llama-3.2-1B-Instruct
+
+training:
+  backbone_training: freeze
+  batch_size: 2
+  num_epochs: 5
+  learning_rate:
+    default: 2.0e-4
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  warmup_ratio: 0.03
+  optimizer:
+    type: adamw
+  early_stopping:
+    enabled: true
+    patience: 3
+    metric: val_loss
+    mode: min
+  logging:
+    log_every_n_steps: 10
+    wandb:
+      enabled: true
+      project: anon-tslm-paper
+  checkpointing:
+    save_every_n_steps: 0
+    save_best: true
+    metric: val_loss
+    mode: min
+  dataloader:
+    num_workers: 4
+    prefetch_factor: 4
+    pin_memory: true
+  eval_max_new_tokens: 500
+
+runtime:
+  output_dir: results
+  run_name: itformer_capture24_haystack_absolute_needle
+  eval_samples_ratio: 0.1
